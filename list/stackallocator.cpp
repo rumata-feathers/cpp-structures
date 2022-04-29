@@ -105,8 +105,6 @@ class List {
   typedef std::allocator_traits<allocator_type> alloc_traits;
 
   template<bool is_const>
-  class ReverseIterator;
-  template<bool is_const>
   class BidirectionalIterator;
 
   typedef BidirectionalIterator<false> iterator;
@@ -281,10 +279,10 @@ class List {
     ~Node() = default;
   };
 
-  mutable BaseNode* fake_node;
   size_t capacity;
   typedef typename alloc_traits::template rebind_alloc<Node> node_alloc;
   node_alloc alloc;
+  mutable BaseNode* fake_node = std::allocator_traits<node_alloc>::allocate(alloc, 1);
 
  public:
   template<bool is_const = false>
@@ -339,11 +337,9 @@ class List {
 template<typename T, typename Alloc>
 List<T, Alloc>::List() {
   capacity = 0;
-  fake_node = alloc.allocate(1);
 }
 template<typename T, typename Alloc>
 List<T, Alloc>::List(size_t n) {
-  fake_node = alloc.allocate(1);
   capacity = 0;
   for (size_t i = 0; i < n; ++i) {
     try {
@@ -352,32 +348,44 @@ List<T, Alloc>::List(size_t n) {
       for (size_t j = 0; j < i; ++j) {
         pop_back();
       }
-      throw std::string("bas constuctor(size_t)");
+      std::allocator_traits<node_alloc>::deallocate(alloc, static_cast<Node*>(fake_node), 1);
+      throw std::string("bad constuctor(size_t)");
     }
   }
 }
 template<typename T, typename Alloc>
 List<T, Alloc>::List(size_t n, const_reference ref) {
-  capacity = n;
-  fake_node = alloc.allocate(1);
-  for (size_t i = 0; i < n; ++i) {
-    push_back(ref);
-  }
-}
-template<typename T, typename Alloc>
-List<T, Alloc>::List(size_t n, const_reference ref, allocator_type other_alloc) {
-  capacity = n;
-  alloc = node_alloc(other_alloc);
-  fake_node = alloc.allocate(1);
-  for (size_t i = 0; i < n; ++i) {
-    push_back(ref);
-  }
-}
-template<typename T, typename Alloc>
-List<T, Alloc>::List(size_t n, allocator_type other_alloc) {
   capacity = 0;
-  alloc = node_alloc(other_alloc);
-  fake_node = alloc.allocate(1);
+  for (size_t i = 0; i < n; ++i) {
+    try {
+      push_back(ref);
+    } catch (...) {
+      for (size_t j = 0; j < i; ++j) {
+        pop_back();
+      }
+      std::allocator_traits<node_alloc>::deallocate(alloc, static_cast<Node*>(fake_node), 1);
+      throw std::string("bad constuctor(size_t, ref)");
+    }
+  }
+}
+template<typename T, typename Alloc>
+List<T, Alloc>::List(size_t n, const_reference ref, allocator_type other_alloc) : alloc(node_alloc(other_alloc)) {
+  capacity = 0;
+  for (size_t i = 0; i < n; ++i) {
+    try {
+      push_back(ref);
+    } catch (...) {
+      for (size_t j = 0; j < i; ++j) {
+        pop_back();
+      }
+      std::allocator_traits<node_alloc>::deallocate(alloc, static_cast<Node*>(fake_node), 1);
+      throw std::string("bad constuctor(size_t, ref, alloc)");
+    }
+  }
+}
+template<typename T, typename Alloc>
+List<T, Alloc>::List(size_t n, allocator_type other_alloc)  : alloc(node_alloc(other_alloc)) {
+  capacity = 0;
   for (size_t i = 0; i < n; ++i) {
     emplace_back();
   }
@@ -409,16 +417,13 @@ List<T, Alloc>& List<T, Alloc>::operator=(const List<T, Alloc>& other) {
   return *this;
 }
 template<typename T, typename Alloc>
-List<T, Alloc>::List(allocator_type other_alloc) {
-  alloc = node_alloc(other_alloc);
+List<T, Alloc>::List(allocator_type other_alloc) : alloc(node_alloc(other_alloc)) {
   capacity = 0;
-  fake_node = alloc.allocate(1);
 }
 template<typename T, typename Alloc>
 template<class U, typename OtherAlloc>
 List<T, Alloc>::List(const List<U, OtherAlloc>& other) : alloc(other.alloc) {
   size_t counter = 0;
-  fake_node = std::allocator_traits<node_alloc>::allocate(alloc, 1);
   capacity = 0;
   for (auto it = other.begin(); it != other.end(); ++it) {
     try {
@@ -436,7 +441,6 @@ template<typename T, typename Alloc>
 List<T, Alloc>::List(const List<T, Alloc>& other) : alloc(other.alloc) {
   size_t counter = 0;
   alloc = std::allocator_traits<node_alloc>::select_on_container_copy_construction(other.alloc);
-  fake_node = std::allocator_traits<node_alloc>::allocate(alloc, 1);
   capacity = 0;
   for (auto it = other.begin(); it != other.end(); ++it) {
     try {
