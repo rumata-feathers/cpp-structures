@@ -1,104 +1,52 @@
-#include <iostream>
 #include <vector>
-
-static const size_t carriage_capacity = 256;
 
 template<typename Type = int>
 class Deque {
  public:
 
-  Deque() {
-    *this = Deque(1);
-    --capacity;
-  };
+  Deque();
+  explicit Deque(size_t);
+  Deque(size_t, const Type&);
+  Deque(const Deque&);
 
-  explicit Deque<Type>(const size_t number) : capacity(number),
-                                              external_size(((number > 0 ? number : 1) / carriage_capacity
-                                                  + ((number > 0 ? number : 1) % carriage_capacity ? 1 : 0)) * 3),
-                                              start((external_size * carriage_capacity) / 3),
-                                              pointers(new Type* [external_size]) {
-    for (size_t i = 0; i < external_size; ++i) {
-      pointers[i] = reinterpret_cast<Type*>(new uint8_t[carriage_capacity * sizeof(Type)]);
-    }
-  };
-
-  Deque(const size_t number, const Type& ptr) : capacity(number),
-                                                external_size((number / carriage_capacity +
-                                                    (number % carriage_capacity ? 1 : 0)) * 3),
-                                                start((external_size * carriage_capacity) / 3),
-                                                pointers(new Type* [external_size]) {
-    size_t num = number;
-    size_t j = start / carriage_capacity;
-    for (size_t i = 0; i < external_size; ++i) {
-      pointers[i] = reinterpret_cast<Type*>(new uint8_t[carriage_capacity * sizeof(Type)]);
-    }
-    while (num > carriage_capacity) {
-      for (size_t i = 0; i < carriage_capacity; ++i) {
-        pointers[j][i] = ptr;
-      }
-      ++j;
-      num -= carriage_capacity;
-    }
-    for (size_t i = 0; i < num; ++i) {
-      pointers[j][i] = ptr;
-    }
-  };
-
-  Deque(const Deque& deq) {
-    *this = Deque<Type>();
-    for (const_iterator i = deq.cbegin(); i != deq.cend(); ++i) {
-      push_back(*i);
-    }
-  }
-
+  Deque& operator=(const Deque&);
   Type& operator[](const size_t num) {
     return *(begin() + num);
   }
-
   const Type& operator[](const size_t num) const {
     return *(cbegin() + num);
   }
-
   Type& at(size_t num) {
     if (begin() + num < end()) {
-      return *(begin() + num);
+      return (*this)[num];
     } else {
-      throw std::out_of_range("bruh in at");
+      throw std::out_of_range("deque::at");
     }
   }
-
   const Type& at(size_t num) const {
     try {
-      return *(cbegin() + num);
+      return const_cast<const Type&>(this[num]);
     } catch (...) {
-      throw std::string("bruh in at");
+      throw std::out_of_range("deque::at");
     }
   }
 
   void resize();
-
   void pop_front();
-
   void pop_back();
-
   void push_front(const Type&);
-
   void push_back(const Type&);
-
-  [[nodiscard]] size_t size() const;
+  size_t size() const noexcept;
 
   ~Deque() = default;
 
   template<bool is_const>
   class Iterator;
 
-  template<typename Iter>
-  class ReverseIterator;
-
   using iterator = Iterator<false>;
   using const_iterator = Iterator<true>;
-  using reverse_iterator = ReverseIterator<iterator>;
-  using const_reverse_iterator = ReverseIterator<const_iterator>;
+  using reverse_iterator = std::reverse_iterator<iterator>;
+  using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
   template<bool is_const>
   class Iterator {
@@ -108,118 +56,95 @@ class Deque {
     using reference = typename std::conditional<is_const, const Type&, Type&>::type;
 
     Iterator() : car_num(nullptr), car_pos(nullptr) {};
-
     Iterator(Type** other_num, Type* other_pos) {
       car_num = other_num;
       car_pos = other_pos;
     };
-
-    Iterator(const Iterator& other) : car_num(other.car_num), car_pos(other.car_pos) {};
-
-    pointer operator->() const { return car_pos; }
-
-    reference operator*() const { return *car_pos; }
-
+    Iterator(const Iterator& other) noexcept: car_num(other.car_num), car_pos(other.car_pos) {};
+    pointer operator->() const noexcept { return car_pos; }
+    reference operator*() const noexcept { return *car_pos; }
     Iterator& operator++() {
-      if (++car_pos - *car_num == carriage_capacity) {
+      if (++car_pos - *car_num == interior_capacity_) {
         ++car_num;
         car_pos = *car_num;
       }
       return *this;
     }
-
     Iterator operator++(int) const {
       Iterator tmp = *this;
       ++(*this);
       return tmp;
     }
-
     Iterator& operator--() {
       if (car_pos == *car_num) {
         --car_num;
-        car_pos = *car_num + carriage_capacity;
+        car_pos = *car_num + interior_capacity_;
       }
       --car_pos;
       return *this;
     }
-
     Iterator operator--(int) const {
       Iterator tmp = *this;
       --(*this);
       return tmp;
     }
-
     Iterator& operator+=(const difference_type dif) {
       if (dif != 0) {
         difference_type tmp = (car_pos - *car_num) + dif;
         if (dif > 0) {
-          car_num += tmp / carriage_capacity;
-          car_pos = *car_num + tmp % carriage_capacity;
+          car_num += tmp / interior_capacity_;
+          car_pos = *car_num + tmp % interior_capacity_;
         } else {
-          tmp = carriage_capacity - 1 - tmp;
-          car_num -= tmp / carriage_capacity;
-          car_pos = *car_num + (carriage_capacity - 1 - tmp % carriage_capacity);
+          tmp = interior_capacity_ - 1 - tmp;
+          car_num -= tmp / interior_capacity_;
+          car_pos = *car_num + (interior_capacity_ - 1 - tmp % interior_capacity_);
         }
       }
       return *this;
     }
-
     Iterator& operator-=(const difference_type dif) {
       (*this) += -dif;
       return (*this);
     }
-
     Iterator operator+(const difference_type dif) const {
       Iterator tmp = *this;
       tmp += dif;
       return tmp;
     }
-
     Iterator operator-(const difference_type dif) const {
       Iterator tmp = *this;
       tmp -= dif;
       return tmp;
     }
-
     friend Iterator operator+(const difference_type dif, const Iterator& x) {
       return x + dif;
     }
-
     friend Iterator operator-(const difference_type dif, const Iterator& x) {
       return x - dif;
     }
-
     friend difference_type operator-(const Iterator& x, const Iterator& y) {
-      return (x.car_num - y.car_num) * carriage_capacity +
+      return (x.car_num - y.car_num) * interior_capacity_ +
           ((x.car_pos - *(x.car_num)) - (y.car_pos - *(y.car_num)));
     }
-
-    friend bool operator==(const Iterator& x, const Iterator& y) {
+    friend bool operator==(const Iterator& x, const Iterator& y) noexcept {
       return x.car_pos == y.car_pos;
     }
-
-    friend bool operator!=(const Iterator& x, const Iterator& y) {
+    friend bool operator!=(const Iterator& x, const Iterator& y) noexcept {
       return x.car_pos != y.car_pos;
     }
-
-    friend bool operator<(const Iterator& x, const Iterator& y) {
+    friend bool operator<(const Iterator& x, const Iterator& y) noexcept {
       return x.car_num < y.car_num || (x.car_num == y.car_num && x.car_pos < y.car_pos);
     }
-
-    friend bool operator>(const Iterator& x, const Iterator& y) {
+    friend bool operator>(const Iterator& x, const Iterator& y) noexcept {
       return y < x;
     }
-
-    friend bool operator<=(const Iterator& x, const Iterator& y) {
+    friend bool operator<=(const Iterator& x, const Iterator& y) noexcept {
       return !(x > y);
     }
-
-    friend bool operator>=(const Iterator& x, const Iterator& y) {
+    friend bool operator>=(const Iterator& x, const Iterator& y) noexcept {
       return !(x < y);
     }
-
-    explicit operator const_iterator() const { return const_iterator(car_num, car_pos); }
-
+    explicit operator const_iterator() const noexcept { return const_iterator(car_num, car_pos); }
     ~Iterator() = default;
 
    private:
@@ -227,189 +152,113 @@ class Deque {
     Type* car_pos;
   };
 
-  template<typename Iter>
-  class ReverseIterator {
-   public:
-    explicit ReverseIterator(Iter iter) : iter(iter - 1) {};
-
-    typename Iter::pointer operator->() const { return &(*iter); }
-
-    typename Iter::reference operator*() const { return *iter; }
-
-    ReverseIterator operator++(int) const { return iter--; }
-
-    ReverseIterator operator--(int) const { return iter++; }
-
-    ReverseIterator& operator++() {
-      --iter;
-      return *this;
-    }
-
-    ReverseIterator& operator--() {
-      ++iter;
-      return *this;
-    }
-
-    ReverseIterator& operator+=(typename Iter::difference_type dif) {
-      iter -= dif;
-      return *this;
-    }
-
-    ReverseIterator& operator-=(typename Iter::difference_type dif) {
-      iter += dif;
-      return *this;
-    }
-
-    ReverseIterator operator+(typename Iter::difference_type dif) const {
-      return iter - dif;
-    }
-
-    ReverseIterator operator-(typename Iter::difference_type dif) const {
-      return iter + dif;
-    }
-
-    friend bool operator==(ReverseIterator rita_1, ReverseIterator rita_2) {
-      return rita_1.iter == rita_2.iter;
-    }
-
-    friend bool operator!=(ReverseIterator rita_1, ReverseIterator rita_2) {
-      return rita_1.iter != rita_2.iter;
-    }
-
-    friend bool operator>(ReverseIterator rita_1, ReverseIterator rita_2) {
-      return rita_1.iter < rita_2.iter;
-    }
-
-    friend bool operator<(ReverseIterator rita_1, ReverseIterator rita_2) {
-      return rita_1.iter > rita_2.iter;
-    }
-
-    friend bool operator>=(ReverseIterator rita_1, ReverseIterator rita_2) {
-      return rita_1.iter <= rita_2.iter;
-    }
-
-    friend bool operator<=(ReverseIterator rita_1, ReverseIterator rita_2) {
-      return rita_1.iter >= rita_2.iter;
-    }
-
-    friend typename Iter::difference_type operator-(const ReverseIterator& rita_1, const ReverseIterator& rita_2) {
-      return -(rita_1.iter - rita_2.iter);
-    }
-
-    explicit operator const_reverse_iterator() const { return const_reverse_iterator(iter); }
-
-    ~ReverseIterator() = default;
-
-   private:
-    Iter iter;
+  iterator begin() noexcept {
+    auto mp = external_array_ + first_num_ / interior_capacity_;
+    return iterator(mp, *mp + first_num_ % interior_capacity_);
   };
-
-  iterator begin() {
-    auto mp = pointers + start / carriage_capacity;
-    return iterator(mp, *mp + start % carriage_capacity);
+  iterator end() noexcept {
+    auto amount = first_num_ + size_;
+    auto mp = external_array_ + amount / interior_capacity_;
+    return iterator(mp, *mp + amount % interior_capacity_);
   };
-
-  iterator end() {
-    auto amount = start + capacity;
-    auto mp = pointers + amount / carriage_capacity;
-    return iterator(mp, *mp + amount % carriage_capacity);
-  };
-
-  [[nodiscard]] const_iterator begin() const {
+  const_iterator begin() const noexcept {
     return cbegin();
   };
-
-  [[nodiscard]] const_iterator end() const {
+  const_iterator end() const noexcept {
     return cend();
   };
+  const_iterator cbegin() const noexcept {
+    auto mp = external_array_ + first_num_ / interior_capacity_;
+    return const_iterator(mp, *mp + first_num_ % interior_capacity_);
+  }
+  const_iterator cend() const noexcept {
+    auto amount = first_num_ + size();
+    auto mp = external_array_ + amount / interior_capacity_;
+    return const_iterator(mp, size_ == 0 ? nullptr : *mp + amount % interior_capacity_);
 
-  [[nodiscard]] const_iterator cbegin() const {
-    auto mp = pointers + start / carriage_capacity;
-    return const_iterator(mp, *mp + start % carriage_capacity);
   }
 
-  const_iterator cend() const {
-    auto amount = start + size();
-    auto mp = pointers + amount / carriage_capacity;
-    return const_iterator(mp, capacity == 0 ? nullptr : *mp + amount % carriage_capacity);
-
-  }
-
-  reverse_iterator rbegin() { return reverse_iterator(end()); }
-
-  reverse_iterator rend() { return reverse_iterator(begin()); }
-
-  const_reverse_iterator rbegin() const { return crbegin(); }
-  const_reverse_iterator rend() const { return crend(); }
-
-  const_reverse_iterator crbegin() const { return const_reverse_iterator(cend()); }
-
-  const_reverse_iterator crend() const { return const_reverse_iterator(cbegin()); }
+  reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
+  reverse_iterator rend() noexcept { return reverse_iterator(begin()); }
+  const_reverse_iterator rbegin() const noexcept { return crbegin(); }
+  const_reverse_iterator rend() const noexcept { return crend(); }
+  const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(cend()); }
+  const_reverse_iterator crend() const noexcept { return const_reverse_iterator(cbegin()); }
 
   void erase(iterator iter);
 
   void insert(iterator iter, const Type& ptr);
 
  protected:
-  size_t capacity = 0;
-  size_t external_size = 0;
-  size_t start = 0;
-  Type** pointers = nullptr;
+  size_t external_capacity_ = 0;
+  Type** external_array_ = nullptr;
+  static const size_t interior_capacity_ = 2;
+  size_t size_ = 0;
+  size_t first_num_ = 0;
+  size_t calculate_size(size_t number) noexcept {
+    if (number == 0) return 1;
+    if (number % interior_capacity_ == 0) return 3 * (number / interior_capacity_);
+    return 3 * (number / interior_capacity_ + 1);
+  }
 };
 
 template<typename Type>
-size_t Deque<Type>::size() const {
-  return capacity;
+size_t Deque<Type>::size() const noexcept {
+  return size_;
 }
 
 template<typename Type>
 void Deque<Type>::resize() {
+  Type** tmp = nullptr;
   try {
-    Deque<Type> tmp(external_size* carriage_capacity);
-    for (size_t i = 0; i < external_size; ++i) {
-      tmp.pointers[external_size + i] = pointers[i];
+    tmp = new Type* [3 * external_capacity_];
+    for (size_t i = 0; i < external_capacity_; ++i) {
+      auto buffer_first = new uint8_t[interior_capacity_ * sizeof(Type)];
+      auto buffer_third = new uint8_t[interior_capacity_ * sizeof(Type)];
+      tmp[i] = new(buffer_first) Type();
+      tmp[i + 2 * external_capacity_] = new(buffer_third) Type();
+      tmp[external_capacity_ + i] = external_array_[i];
     }
-    tmp.start = (tmp.external_size * carriage_capacity) / 3 + start;
-    tmp.capacity = capacity;
-    delete[] pointers;
-    *this = tmp;
+    first_num_ += external_capacity_ * interior_capacity_;
+    external_capacity_ *= 3;
+    external_array_ = tmp;
   } catch (...) {
+    delete[] tmp;
     throw;
   }
 }
 
 template<typename Type>
 void Deque<Type>::pop_front() {
-  ++start;
-  --capacity;
-  if (capacity == 0) start = external_size / 3;
+//  delete &external_array_[first_num_ / interior_capacity_][first_num_ % interior_capacity_];
+  ++first_num_;
+  --size_;
+  if (size_ == 0) first_num_ = external_capacity_ / 3;
 }
 
 template<typename Type>
 void Deque<Type>::pop_back() {
-  --capacity;
-  if (capacity == 0) start = external_size / 3;
+//  delete &external_array_[(first_num_ + size_) / interior_capacity_][(first_num_ + size_) % interior_capacity_];
+  --size_;
+  if (size_ == 0) first_num_ = external_capacity_ / 3;
 }
-
 template<typename Type>
 void Deque<Type>::push_front(const Type& ptr) {
-  if (start == 0) {
+  if (first_num_ == 0) {
     resize();
   }
-  --start;
-  pointers[start / carriage_capacity][start % carriage_capacity] = ptr;
-  ++capacity;
+  external_array_[(first_num_ - 1) / interior_capacity_][(first_num_ - 1) % interior_capacity_] = ptr;
+  --first_num_;
+  ++size_;
 }
-
 template<typename Type>
 void Deque<Type>::push_back(const Type& ptr) {
-  if (start + capacity == external_size * carriage_capacity) {
+  if (first_num_ + size_ == external_capacity_ * interior_capacity_ - 1) {
     resize();
   }
-  pointers[(start + capacity) / carriage_capacity][(start + capacity) % carriage_capacity] = ptr;
-  ++capacity;
+  external_array_[(first_num_ + size_) / interior_capacity_][(first_num_ + size_) % interior_capacity_] = ptr;
+  ++size_;
 }
-
 template<typename Type>
 void Deque<Type>::erase(Deque::iterator iter) {
   try {
@@ -421,10 +270,9 @@ void Deque<Type>::erase(Deque::iterator iter) {
     }
     *this = tmp;
   } catch (...) {
-    throw std::string("bad erase");
+    throw std::out_of_range("bad erase");
   }
 }
-
 template<typename Type>
 void Deque<Type>::insert(Deque::iterator iter, const Type& ptr) {
   try {
@@ -438,8 +286,102 @@ void Deque<Type>::insert(Deque::iterator iter, const Type& ptr) {
     }
     *this = tmp;
   } catch (...) {
-    throw std::string("bad insert");
+    throw std::out_of_range("bad insert");
   }
 }
+
+template<typename Type>
+Deque<Type>::Deque() {
+  external_capacity_ = 1;
+  external_array_ = new Type* [1];
+  auto buffer = new uint8_t[interior_capacity_ * sizeof(Type)];
+  external_array_[0] = new(buffer) Type;
+}
+template<typename Type>
+Deque<Type>::Deque(size_t number) {
+  try {
+    external_capacity_ = calculate_size(number);
+    first_num_ = (external_capacity_ / 3) * interior_capacity_;
+    external_array_ = new Type* [external_capacity_];
+    size_ = number;
+    for (size_t i = 0; i < external_capacity_; ++i) {
+      auto buffer = new uint8_t[interior_capacity_ * sizeof(Type)];
+      external_array_[i] = new(buffer) Type();
+    }
+  } catch (...) {
+    for (int i = 0; i < external_capacity_; ++i) {
+      delete[] external_array_[i];
+    }
+    delete[] external_array_;
+    throw std::logic_error("deque::deque(): not default constructible type");
+  }
+}
+template<typename Type>
+Deque<Type>& Deque<Type>::operator=(const Deque& other_deque) {
+  size_t initial_size = size();
+  size_t pushed_amount = 0;
+  try {
+    for (auto& el : other_deque) {
+      push_back(el);
+      ++pushed_amount;
+    }
+    for (int i = 0; i < initial_size; ++i) {
+      pop_front();
+    }
+    return *this;
+  } catch (...) {
+    for (int i = 0; i < pushed_amount; ++i) {
+      pop_back();
+    }
+    throw std::invalid_argument("deque::operator=");
+  }
+}
+template<typename Type>
+Deque<Type>::Deque(const Deque& deq) {
+  external_capacity_ = calculate_size(deq.size());
+  first_num_ = (external_capacity_ / 3) * interior_capacity_;
+  Type** tmp = new Type*[external_capacity_];
+  try {
+    for (int i = 0; i < external_capacity_; ++i) {
+      auto buffer = new uint8_t[interior_capacity_ * sizeof(Type)];
+      tmp[i] = new(buffer) Type();
+    }
+    for (size_t i = 0; i < deq.size(); ++i) {
+      tmp[(first_num_ + i) / interior_capacity_][(first_num_ + i) % interior_capacity_] = deq[i];
+    }
+    external_array_ = tmp;
+    size_ = deq.size();
+  } catch (...) {
+    for (int i = 0; i < external_capacity_; ++i) {
+      delete[] tmp[i];
+    }
+    delete[] tmp;
+    external_capacity_ = 0;
+    first_num_ = 0;
+    throw std::invalid_argument("deque::deque(const deque&)");
+  }
+}
+template<typename Type>
+Deque<Type>::Deque(size_t number, const Type& ptr) {
+  try {
+    size_ = number;
+    external_capacity_ = calculate_size(number);
+    external_array_ = new Type* [external_capacity_];
+    for (size_t i = 0; i < external_capacity_; ++i) {
+      auto buffer = new uint8_t[interior_capacity_ * sizeof(Type)];
+      external_array_[i] = new(buffer) Type();
+    }
+    first_num_ = external_capacity_ * interior_capacity_ / 3;
+    for (int i = 0; i < number; ++i) {
+      external_array_[(first_num_ + i) / interior_capacity_][(first_num_ + i) % interior_capacity_] = ptr;
+    }
+  } catch (...) {
+    for (int i = 0; i < external_capacity_; ++i) {
+      delete[] external_array_[i];
+    }
+    throw std::out_of_range("deque:deque(size_t, type&");
+  }
+}
+
 
 
