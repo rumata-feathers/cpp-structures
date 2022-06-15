@@ -1,5 +1,5 @@
 #include <vector>
-#include <iostream>
+
 
 template<typename Type = int>
 class Deque {
