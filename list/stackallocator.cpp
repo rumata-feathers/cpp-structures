@@ -1,13 +1,8 @@
-#include <iostream>
-
 template<size_t N>
 class StackStorage {
  private:
   char buffer_[N];
   size_t capacity_;
-  void alignment(size_t size_of_type) {
-    capacity_ = (capacity_ / size_of_type) * size_of_type + (capacity_ % size_of_type == 0 ? 0 : size_of_type);
-  }
  public:
   StackStorage();
   char* allocate(size_t, size_t);
@@ -22,9 +17,8 @@ template<size_t N>
 char* StackStorage<N>::allocate(size_t size_of_type, size_t n) {
   char* ptr_{buffer_};
   if (capacity_ + n < N) {
-    alignment(size_of_type);
-    ptr_ += capacity_;
-    capacity_ += n * size_of_type;
+    ptr_ = std::align(buffer_ + capacity_, size_of_type);
+    capacity_ = (ptr_ - buffer_) + n * size_of_type;
     return ptr_;
   } else {
     throw std::out_of_range("bad allocate");
@@ -133,8 +127,9 @@ class List {
     return capacity == 0;
   }
   void push_front(const_reference ref) {
+    Node* new_node = nullptr;
     try {
-      Node* new_node = alloc.allocate(1);
+      new_node = alloc.allocate(1);
       std::allocator_traits<node_alloc>::construct(alloc, new_node, ref);
       fake_node->next->prev = new_node;
       new_node->next = fake_node->next;
@@ -142,12 +137,15 @@ class List {
       fake_node->next = new_node;
       ++capacity;
     } catch (...) {
+      std::allocator_traits<node_alloc>::destroy(alloc, new_node);
+      std::allocator_traits<node_alloc>::deallocate(alloc, new_node, ref);
       throw std::string("bad push_front");
     }
   }
   void push_back(const_reference ref) {
+    Node* new_node = nullptr;
     try {
-      Node* new_node = alloc.allocate(1);
+      new_node = alloc.allocate(1);
       std::allocator_traits<node_alloc>::construct(alloc, new_node, ref);
       if (capacity == 0) {
         new_node->prev = fake_node;
@@ -160,12 +158,15 @@ class List {
       fake_node->prev = new_node;
       ++capacity;
     } catch (...) {
+      std::allocator_traits<node_alloc>::destroy(alloc, new_node);
+      std::allocator_traits<node_alloc>::deallocate(alloc, new_node, ref);
       throw std::string("bad push_back");
     }
   }
   iterator insert(const_iterator iter, const_reference ref) {
+    Node* new_node = nullptr;
     try {
-      Node* new_node = alloc.allocate(1);
+      new_node = alloc.allocate(1);
       std::allocator_traits<node_alloc>::construct(alloc, new_node, ref);
       new_node->next = iter.get_node();
       new_node->prev = iter.get_node()->prev;
@@ -174,6 +175,8 @@ class List {
       ++capacity;
       return iterator(new_node);
     } catch (...) {
+      std::allocator_traits<node_alloc>::destroy(alloc, new_node);
+      std::allocator_traits<node_alloc>::deallocate(alloc, new_node, ref);
       throw std::string("bad insert()");
     }
   }
