@@ -5,17 +5,6 @@ template<typename Type = int>
 class Deque {
  public:
 
-  void print() {
-    std::cout << "DEQUE:\n";
-    for (int j = 0; j < external_capacity_; ++j) {
-      for (int i = 0; i < interior_capacity_; ++i) {
-        std::cout << external_array_[j][i] << ' ';
-      }
-      std::cout << "\n";
-    }
-    std::cout << "\n-------\n";
-  }
-
   Deque();
   explicit Deque(size_t);
   Deque(size_t, const Type &);
@@ -221,7 +210,7 @@ class Deque {
  protected:
   size_t external_capacity_ = 0;
   Type **external_array_ = nullptr;
-  static const size_t interior_capacity_ = 2;
+  static const size_t interior_capacity_ = 256;
   size_t size_ = 0;
   size_t first_num_ = 0;
   size_t calculate_size(size_t number) noexcept {
