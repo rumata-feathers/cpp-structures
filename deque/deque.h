@@ -337,7 +337,6 @@ Deque<Type>::Deque(size_t number) {
   external_array_ = new Type *[external_capacity_];
   uint8_t *buffer = nullptr;
   size_t i;
-  size_ = number;
   first_num_ = (external_capacity_ / 3) * interior_capacity_;
   try {
     for (i = 0; i < external_capacity_; ++i) {
@@ -356,6 +355,7 @@ Deque<Type>::Deque(size_t number) {
   try {
     for (pushed = 0; pushed < number; ++pushed) {
       new(external_array_[i + pushed / interior_capacity_] + pushed % interior_capacity_) Type;
+      ++size;
     }
   } catch (...) {
     for (int j = 0; j < pushed; ++j) {
