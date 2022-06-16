@@ -4,8 +4,7 @@ template<typename Type = int>
 class Deque {
  public:
 
-  Deque();
-  explicit Deque(size_t);
+  Deque(size_t = 0);
   Deque(size_t, const Type &);
   Deque(const Deque &);
 
@@ -228,7 +227,8 @@ class Deque {
 template<typename Type>
 size_t Deque<Type>::size() const
 noexcept {
-return size_;
+return
+size_;
 }
 
 template<typename Type>
@@ -249,29 +249,9 @@ void Deque<Type>::resize() {
         delete[] buffer_first;
         throw;
       }
-      try {
-        for (i = 0; i < interior_capacity_; ++i) {
-          new(buffer_first + i) Type;
-          try {
-            new(buffer_third + i) Type;
-          } catch (...) {
-            tmp[ext_i][i].~Type();
-            throw;
-          }
-        }
-
-        tmp[ext_i] = reinterpret_cast<Type *>(buffer_first);
-        tmp[ext_i + 2 * external_capacity_] = reinterpret_cast<Type *>(buffer_third);
-        tmp[external_capacity_ + ext_i] = external_array_[ext_i];
-
-      } catch (...) {
-        for (int j = 0; j < i; ++j) {
-          tmp[ext_i][j].~Type();
-          tmp[ext_i + 2 * external_capacity_][j].~Type();
-        }
-        delete[] tmp[ext_i];
-        throw;
-      }
+      tmp[ext_i] = reinterpret_cast<Type *>(buffer_first);
+      tmp[ext_i + 2 * external_capacity_] = reinterpret_cast<Type *>(buffer_third);
+      tmp[external_capacity_ + ext_i] = external_array_[ext_i];
     }
     first_num_ += external_capacity_ * interior_capacity_;
     external_capacity_ *= 3;
@@ -352,62 +332,37 @@ void Deque<Type>::insert(Deque::iterator iter, const Type &ptr) {
 }
 
 template<typename Type>
-Deque<Type>::Deque() {
-  external_capacity_ = 1;
-  external_array_ = new Type *[1];
-  int placed = 0;
-
-  try {
-    auto buffer = new uint8_t[interior_capacity_ * sizeof(Type)];
-    for (placed = 0; placed < interior_capacity_; ++placed) {
-      try {
-        new(buffer + placed) Type;
-      } catch (...) {
-        for (int i = 0; i < placed; ++i) {
-          external_array_[0][i].~Type();
-        }
-        delete[] buffer;
-        throw;
-      }
-    }
-    external_array_[0] = reinterpret_cast<Type *>(buffer);
-  } catch (...) {
-    delete[] external_array_;
-    throw;
-  }
-}
-
-template<typename Type>
 Deque<Type>::Deque(size_t number) {
   external_capacity_ = calculate_size(number);
   external_array_ = new Type *[external_capacity_];
   uint8_t *buffer = nullptr;
   size_t i;
+  size_ = number;
+  first_num_ = (external_capacity_ / 3) * interior_capacity_;
   try {
-    size_ = number;
-    first_num_ = (external_capacity_ / 3) * interior_capacity_;
-    size_t pushed;
     for (i = 0; i < external_capacity_; ++i) {
       buffer = new uint8_t[interior_capacity_ * sizeof(Type)];
-      try {
-        for (pushed = 0; pushed < interior_capacity_; ++pushed) {
-          new(buffer + pushed) Type;
-        }
-        external_array_[i] = reinterpret_cast<Type *>(buffer);
-      } catch (...) {
-        for (int j = 0; j < pushed; ++j) {
-          external_array_[i][j].~Type();
-        }
-        delete[] external_array_[i];
-        throw;
-      }
+      external_array_[i] = reinterpret_cast<Type *>(buffer);
     }
   } catch (...) {
     for (int j = 0; j < i; ++j) {
-      for (int k = 0; k < interior_capacity_; ++k) {
-        external_array_[j][k].~Type();
-      }
       delete[] external_array_[j];
+    }
+    delete[] external_array_;
+    throw;
+  }
+
+  size_t pushed;
+  try {
+    for (pushed = 0; pushed < number; ++pushed) {
+      new(external_array_[i + pushed / interior_capacity_] + pushed % interior_capacity_) Type;
+    }
+  } catch (...) {
+    for (int j = 0; j < pushed; ++j) {
+      pop_back();
+    }
+    for (int j = 0; j < external_capacity_; ++j) {
+      delete[] external_array_[i];
     }
     delete[] external_array_;
     throw std::logic_error("deque::deque(): not default constructible type");
