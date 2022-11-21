@@ -9,4 +9,4 @@ Structures:
    - unordered_map
    - shared_ptr
    - (extra) product sum
-## Every branch has statement of the problem (on Russian) and tests
+#### Every branch has statement of the problem (on Russian and English) and tests
